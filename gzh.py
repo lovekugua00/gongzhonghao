@@ -10,13 +10,14 @@ import time
 import random
 
 class ghdog:
-	"""微信狗，采集热门微信公众号以及文章"""
+	"""公号狗，采集热门微信公众号及文章"""
 	def __init__(self):		
 		self.proxies = [None];	
 		self.data_tables = {
 			'gzh':'wx_gzh',
 			'category':'wx_category',
-			'rank':'wx_rank'
+			'rank':'wx_rank',
+			'articles':'wp_articles'
 		}	
 		self.db = mysql.connector.connect(host='localhost', user='root',passwd='',db='ghdog')
 		self.headers = {
@@ -49,9 +50,11 @@ class ghdog:
 				CREATE TABLE IF NOT EXISTS wx_articles (
 				id int(11) NOT NULL AUTO_INCREMENT,
 				wx_id varchar(32) NOT NULL,
+				article_author varchar(64) DEFAULT NULL,
 				article_title text NOT NULL,
 				article_excerpt text DEFAULT NULL,				
 				article_content text DEFAULT NULL,
+				article_copyright int(1) DEFAULT 0,
 				article_date datetime DEFAULT NULL,
 				PRIMARY KEY (id)
 				);
@@ -70,7 +73,7 @@ class ghdog:
 				PRIMARY KEY (id)
 				);
 			'''		
-		# cursor.execute(sql,multi=True)	
+		# 一次创建所有表	
 		for s in cursor.execute(sql, multi=True): pass
 		cursor.close()				
 
@@ -87,20 +90,14 @@ class ghdog:
 				content=response.read().decode("utf8")
 				return content
 
+	#获取微信公众号分类
 	def fetchWeixinCategory(self):
 		db = self.db
 		cursor = db.cursor()
 		url = "http://www.weizhishu.com/hotlist/account"
 		headers = self.__wzs_headers;
-		req = Request(url,headers=headers)
-		try:
-			response = urlopen(req,timeout=1000)			
-		except HTTPError as e:
-			print('HTTP错误')
-		except URLError as e:
-			print('服务器没响应'+e.reason)				
-		else:
-			content=response.read().decode("utf8")
+		content = self.__requestPage(url,headers);
+		if content:
 			pattern=re.compile('<li >\s*<a href="\?gid=(.*?)">\s*<!--\s*<img src="/img/d-xh.png" alt=""/>\s*-->\s*(.*?)\s*</a>\s*</li>',re.S)
 			items = re.findall(pattern,content)			
 			sql = 'insert into wx_category(id,name) values(%s,%s)'
@@ -112,7 +109,7 @@ class ghdog:
 				except:
 					db.rollback()
 
-	#获取微信分类排行榜
+	#获取微信公众号分类排行榜
 	def fetchWeixinRank(self):
 		db = self.db;
 		headers = self.__wzs_headers;
