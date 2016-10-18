@@ -73,7 +73,7 @@ class ghdog:
 				PRIMARY KEY (id)
 				);
 			'''		
-		# 一次创建所有表	
+		# 一次性创建所有表	
 		for s in cursor.execute(sql, multi=True): pass
 		cursor.close()				
 
