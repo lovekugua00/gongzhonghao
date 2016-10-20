@@ -164,38 +164,8 @@ class GZHDog:
 				pageIndex+=1
 		return wList
 	
-	#添加热门微信号	
-	#@parama {list} wList 微信公众号列表[(ranking,id),(ranking,id)]
-	def addHotWeixinhao(self,wList):
-		db = self.db
-		cursor = db.cursor()
-		if(len(wList)):			
-			sql = "replace into gongzhonghao(ranking,id) values('%s','%s')"			
-			try:
-				cursor.executemany(sql,v)
-				db.commit()
-			except:
-				print('插入数据失败')
-				db.rollback()
-		return
-
-	#更新热门微信号排名	
-	#@parama {list} wList 微信公众号列表[(ranking,id),(ranking,id)]
-	def updateRanking(self,wList):
-		db = self.db
-		cursor = db.cursor()
-		if(len(wList)):
-			for v in wList:
-				sql = "update gongzhonghao set cat_id='%s',set ranking='%s' where wx_id='%s'" % v				
-				try:
-					cursor.execute(sql)
-					db.commit()
-				except:
-					print('插入数据失败')
-					db.rollback()
-		return
-
-	def getEmptyGongzhonghao(self):
+	#查询信息不足的微信号
+	def __getEmptyGongzhonghao(self):
 		cursor = self.db.cursor()
 		sql = "select id from gongzhonghao where name='' and isNull(profile)"
 		try:
@@ -206,6 +176,28 @@ class GZHDog:
 		except:
 			print("查询出错")
 			return None		
+
+	#根据rank表去抓取所需的公众号信息
+	def fetchRankGongzhonghao(self):		
+		cursor = self.db.cursor()
+		#查找出所有的公众号ID
+		sql = "select wx_id from "+self.data_tables['gzh'];		
+		try:
+			cursor.execute(sql)
+			results = cursor.fetchall()
+			tup_wx_id = ()
+			for v in results:
+				tup_wx_id+=v
+			sql = 'select wx_id from '+self.data_tables['rank']+' where wx_id not in '+str(tup_wx_id)
+			cursor.execute(sql)
+			wxList = cursor.fetchall()
+		except:
+			print("查询出错")		
+		for wx in wxList:
+			data = self.findGongzhonghao(wx[0])
+			if(data):			
+				self.__addGongzhonghao(data)
+				print(data[1]+"采集成功")
 
 	#通过搜狗查询公众号详细信息
 	#@param {string} wid 公众号ID
@@ -231,8 +223,28 @@ class GZHDog:
 			else:
 				return None			
 	
+	#添加新的公众号
+	def __addGongzhonghao(self,data):
+		if(data and len(data)):
+			avatar = data[0]
+			name = data[1]
+			wx_id = data[2]
+			profile = data[4]or""
+			auth = data[6]or""
+			db = self.db
+			cursor = db.cursor();
+			sql = "insert into "+self.data_tables["gzh"]+" set wx_id='%s', name='%s', avatar='%s',profile='%s',auth='%s',timestamp='%s' where id='%s'"%(wx_id,name,avatar,profile,auth,time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()));
+			try:
+			   # 执行SQL语句
+			   cursor.execute(sql)
+			   # 提交到数据库执行
+			   db.commit()
+			except:
+			   # 发生错误时回滚
+			   db.rollback()
+
 	#更新公众号信息
-	def updateGongzhonghao(self,data):
+	def __updateGongzhonghao(self,data):
 		if(data and len(data)):
 			avatar = data[0]
 			name = data[1]
@@ -292,12 +304,12 @@ class GZHDog:
 	    print('智能切换代理：%s' % ('本机' if proxy==None else proxy))
 
 	def start(self):
-		gongzhonghaoList = self.getEmptyGongzhonghao()	
+		gongzhonghaoList = self.__getEmptyGongzhonghao()	
 		print(gongzhonghaoList)
 		self.change_proxy()			
 		for g in gongzhonghaoList:
 			results = self.findGongzhonghao(g[0])
-			self.updateGongzhonghao(results)
+			self.__updateGongzhonghao(results)
 		self.db.close()
 
 
