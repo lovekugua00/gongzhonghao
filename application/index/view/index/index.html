@@ -14,35 +14,32 @@
 		<div class="m-container">
 			<div class="m-nav-box">
 				<ul class="nav nav-tabs">
-					<li class="cur">
-						<a href="#">热门</a>
-					</li>
-					<li><a href="#">推荐</a></li>
-					<li></li>
-					<li></li>
-					<li><a href="#">更多<i class="fa fa-angle-down" aria-hidden="true"></i></a></li>				
+				{volist name="cat_list" id="cat" offset="0" length="4"}
+				<li {eq name="key" value="0"}class="cur"{/eq}><a id="cat{$cat.id}" href="javascript:;">{$cat.name}</a></li>
+				{/volist}
+					<li><a href="javascript:;">更多<i class="fa fa-angle-down" aria-hidden="true"></i></a></li>				
+				</ul>
+				<ul class="nav more-nav-tabs">
+				{volist name="cat_list" id="cat" offset="5"}
+				<li><a id="cat{$cat.id}" href="javascript:;">{$cat.name}</a></li>
+				{/volist}										
 				</ul>
 			</div>
 			<div class="card">
 				<div class="card-list">
+					{volist name="wx_list" id="wx"}						
 					<div class="card-panel m-avatar-box">
 						<div class="card-panel-wrap">
 							<div class="m-box">
-								<div class="m-img-box"> <img src="http://tva4.sinaimg.cn/crop.0.0.1328.1328.180/47009408jw8f662qn3rawj210w10wn1d.jpg"> </div>
-								<div class="m-box-center m-box-col"> <div class="m-text-box"> <h3 class="m-text-cut">高晓松</h3> <h4 class="m-text-cut">阿里娱乐战略委员会主席，雜書舘馆长</h4> <h4 class="m-text-cut">粉丝：3894万</h4> </div></div>	
+								<div class="m-img-box"> <img src="{$wx.avatar??''}"> </div>
+								<div class="m-box-center m-box-col"> <div class="m-text-box"> <h3 class="m-text-cut">{$wx.name??''}</h3> 
+								<h4 class="m-text-cut"><label>微信号：</label><span>{$wx.wx_id??''}</span></h4>
+								<h4 class="m-text-cut"><label>功能介绍：</label><span>{$wx.profile??''}</span></h4></div></div>	
 								<div class="m-box-right"></div>											
 							</div>
 						</div>
 					</div>
-					<div class="card-panel m-avatar-box">
-						<div class="card-panel-wrap">
-							<div class="m-box">
-								<div class="m-img-box"> <img src="http://tva2.sinaimg.cn/crop.5.12.626.626.180/6ae35d94jw8f6vlnnzgu1j20i40i4jz2.jpg"> </div>
-								<div class="m-box-center m-box-col"> <div class="m-text-box"> <h3 class="m-text-cut">高晓松</h3> <h4 class="m-text-cut">阿里娱乐战略委员会主席，雜書舘馆长</h4> <h4 class="m-text-cut">粉丝：3894万</h4> </div></div>	
-								<div class="m-box-right"></div>											
-							</div>
-						</div>
-					</div>					
+					{/volist}					
 				</div>
 			</div>
 		</div>

@@ -1,6 +1,6 @@
-from gzh import ghdog
+from gzh import GZHDog
 
-dog = ghdog()
+
 # dog.fetchWeixinRank()
 # dog.start()
 # wList = dog.getHotWeixinhao(10)

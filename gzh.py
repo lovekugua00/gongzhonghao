@@ -9,7 +9,8 @@ import mysql.connector
 import time
 import random
 
-class ghdog:
+class GZHDog:
+
 	"""公号狗，采集热门微信公众号及文章"""
 	def __init__(self):		
 		self.proxies = [None];	
@@ -138,8 +139,6 @@ class ghdog:
 		cursor.close()
 
 
-
-
 	#查找热门微信公众号
 	#@param {int} pageCount 最多获取多少页的微信公众号
 	#@return {list} 返回微信号列表[(ranking,id),(ranking,id)]
@@ -187,7 +186,7 @@ class ghdog:
 		cursor = db.cursor()
 		if(len(wList)):
 			for v in wList:
-				sql = "update gongzhonghao set ranking='%s' where wx_id='%s'" % v				
+				sql = "update gongzhonghao set cat_id='%s',set ranking='%s' where wx_id='%s'" % v				
 				try:
 					cursor.execute(sql)
 					db.commit()
