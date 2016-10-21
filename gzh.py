@@ -1,9 +1,10 @@
 #这是注释
 #coding=utf-8
 
-
-from urllib.request import Request, urlopen,ProxyHandler,install_opener,build_opener
+import urllib
+from urllib.request import Request, urlopen,ProxyHandler,install_opener,build_opener,urlretrieve
 from urllib.error import URLError, HTTPError
+import os
 import re
 import mysql.connector
 import time
@@ -40,6 +41,7 @@ class GZHDog:
 				CREATE TABLE IF NOT EXISTS wx_gzh (
 				wx_id varchar(32) NOT NULL,
 				name varchar(32) NOT NULL,
+				ori_avatar varchar(128) DEFAULT NULL,
 				avatar varchar(128) DEFAULT NULL,
 				profile varchar(256) DEFAULT NULL,
 				auth varchar(32) DEFAULT NULL,
@@ -199,8 +201,10 @@ class GZHDog:
 				self.__addGongzhonghao(data)
 				print(data[1]+"采集成功")
 
-	#通过搜狗查询公众号详细信息
-	#@param {string} wid 公众号ID
+	"""
+	通过搜狗查询公众号详细信息
+	@param {string} wid 公众号ID
+	"""
 	def findGongzhonghao(self,wid):
 		url = 'http://weixin.sogou.com/weixin?type=1&query='+wid+'&ie=utf8&_sug_=n&_sug_type_='
 		headers = self.headers
@@ -226,14 +230,14 @@ class GZHDog:
 	#添加新的公众号
 	def __addGongzhonghao(self,data):
 		if(data and len(data)):
-			avatar = data[0]
+			ori_avatar = data[0]
 			name = data[1]
 			wx_id = data[2]
 			profile = data[4]or""
 			auth = data[6]or""
 			db = self.db
 			cursor = db.cursor();
-			sql = "insert into "+self.data_tables["gzh"]+" set wx_id='%s', name='%s', avatar='%s',profile='%s',auth='%s',timestamp='%s' where id='%s'"%(wx_id,name,avatar,profile,auth,time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()));
+			sql = "insert into "+self.data_tables["gzh"]+" set wx_id='%s', name='%s', ori_avatar='%s',profile='%s',auth='%s',timestamp='%s' "%(wx_id,name,ori_avatar,profile,auth,time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()));
 			try:
 			   # 执行SQL语句
 			   cursor.execute(sql)
@@ -242,18 +246,32 @@ class GZHDog:
 			except:
 			   # 发生错误时回滚
 			   db.rollback()
+	
+	#更新公众号头像
+	def __updateAvatar(self,wx_id,img_url):
+		if(wx_id and img_url):
+			db = self.db
+			cursor = db.cursor();			
+			sql = "update "+self.data_tables['gzh']+" set avatar ='%s' where wx_id='%s'" % (img_url,wx_id)
+			try:
+				cursor.execute(sql)
+				db.commit()
+				cursor.close()
+			except :
+				db.rollback
+
 
 	#更新公众号信息
 	def __updateGongzhonghao(self,data):
 		if(data and len(data)):
-			avatar = data[0]
+			ori_avatar = data[0]
 			name = data[1]
 			wid = data[2]
 			profile = data[4]or""
 			auth = data[6]or""
 			db = self.db
 			cursor = db.cursor();
-			sql = "update gongzhonghao set name='%s', avatar='%s',profile='%s',auth='%s',timestamp='%s' where id='%s'"%(name,avatar,profile,auth,time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),wid);
+			sql = "update "+self.data_tables['gzh']+" set name='%s', ori_avatar='%s',profile='%s',auth='%s',timestamp='%s' where id='%s'"%(name,ori_avatar,profile,auth,time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),wid);
 			try:
 			   # 执行SQL语句
 			   cursor.execute(sql)
@@ -302,15 +320,67 @@ class GZHDog:
 	    opener.addheaders = [('User-Agent',headers['User-Agent'])]
 	    install_opener(opener)
 	    print('智能切换代理：%s' % ('本机' if proxy==None else proxy))
+	
+
+
+	#显示文件下载进度  
+	def __schedule(self,a,b,c):  
+		''' 
+		a:已经下载的数据块 
+		b:数据块的大小 
+		c:远程文件的大小 
+		'''  
+		per = 100.0 * a * b / c  
+		if per > 100 :  
+		    per = 100  
+		print ('%.2f%%' % per )
+
+
+	"""
+		下载图片到本地
+	"""
+	def __downloadImg(self,url): 
+		'''
+		图片url格式"http://img01.sogoucdn.com/app/a/100520090/oIWsFtw53Ls8D6DZ6mvxn0UaAoPU"
+		直接拿地址最后一段oIWsFtw53Ls8D6DZ6mvxn0UaAoPU作为图片名称
+		'''
+		if url:
+			pic_name = url.split('/')[-1]
+
+			#定义文件夹的名字  
+			t = time.localtime(time.time())  		 
+			picpath = 'E:\\workspace\\gongzhonghao\\public\\static\\avatar' #下载到的本地目录  
+			  
+			if not os.path.exists(picpath):   #路径不存在时创建一个  
+			    os.makedirs(picpath)      
+			path = picpath+'\\%s.jpg' %  pic_name	
+			rel_path = "/static/avatar/%s.jpg" % pic_name	
+			image = urlretrieve(url, path, self.__schedule) 		
+			return rel_path; 
+
+
 
 	def start(self):
-		gongzhonghaoList = self.__getEmptyGongzhonghao()	
-		print(gongzhonghaoList)
-		self.change_proxy()			
-		for g in gongzhonghaoList:
-			results = self.findGongzhonghao(g[0])
-			self.__updateGongzhonghao(results)
-		self.db.close()
+		# self.change_proxy()			
+		db = self.db
+		cursor = db.cursor()
+		sql = 'select wx_id,ori_avatar from %s where  isnull(avatar) ' % self.data_tables['gzh']
+		cursor.execute(sql)		
+		result = cursor.fetchall()		
+		if(len(result)):
+			for item in result:
+				wx_id = item[0]
+				img_url = item[1]
+				rel_path = self.__downloadImg(img_url)
+				print(rel_path)
+				if(rel_path):
+					self.__updateAvatar(wx_id,rel_path)
+				print('%s头像更新成功' % wx_id)
+
+
+
+
+
 
 
 
