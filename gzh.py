@@ -253,14 +253,21 @@ class GZHDog:
 		pattern = re.compile('<h2 class="rich_media_title" id="activity-name">\s+(.*?)\s*</h2>\s+<div class="rich_media_meta_list">[\s\S]*?<em class="rich_media_meta rich_media_meta_text" id="post-date">(.*?)<\/em>\s<em class="rich_media_meta rich_media_meta_text">(.*?)<\/em>[\s\S]*?<div class="rich_media_content " id="js_content">([\s\S]*?)<\/div>\s<div class="ct_mpda_wrp" id="js_sponsor_ad_area" style="display:none;">')			
 		tag_pattern = re.compile('<span class="rich_media_meta meta_original_tag" id="copyright_logo">.*?</span>');
 		if(content):
-			match = pattern.search(content)			
+			match = pattern.search(content)		
 			if(match):
-				t = match.groups();
-				title = t[0]
-				date = t[1]
-				author = t[2]
-				cont = t[3]	
-				print(cont)			
+				'''
+					t = match.groups(); title = t[0] date = t[1] author = t[2] cont = t[3]					
+				'''
+				a1 = match.groups()
+				tm = tag_pattern.search(content)
+				if(tm):
+					#(1,)表示原创文章
+					articles = a1+(1,)
+				return articles
+			else:
+				return None
+		else:
+			return None
 
 	"""
 	通过搜狗查询公众号详细信息
