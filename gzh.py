@@ -216,16 +216,18 @@ class GZHDog:
 	获取微信公众号文章地址列表
 	"""
 	def fetchArticleLinks(self,wx_id,page = 0):
+		page = page
 		db = self.db
 		cursor = db.cursor()		
-		url = 'http://chuansong.me/account/newsxinhua?start=%s' % (12*page,)
+		url = 'http://chuansong.me/account/%s?start=%s' % (wx_id,12*page)
 		content = self.__requestPage(url,{'User-Agent':'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.89 Safari/537.36'})
 		if(content):
 			pattern = re.compile('<a class="question_link" href="/n/(.*?)" target="_blank">.*?</a>.*?<span class="timestamp" style="color: #999">(.*?)</span>',re.S)	
 			items = re.findall(pattern,content)
-			if(len(items)):
+			if(len(items) and page<2):
 				page = page+1
 				print('%s:开始采集第%s页文章链接' % (wx_id,page))
+				print(items)
 				try:
 					sql = 'insert into '+self.data_tables['links']+'(link_id,link_date) values(%s,%s)'
 					cursor.executemany(sql,items)
@@ -233,12 +235,16 @@ class GZHDog:
 					cursor.close()					
 					print('第%s页采集完成' % page)
 					# 休息3秒后继续采集下一页
+					# 只采集前五页的文章链接
 					time.sleep(3)
 					self.fetchArticleLinks(wx_id,page)
-				except:
+				except Exception as e:
 					db.rollback()
-					# time.sleep(3)
-					# self.fetchArticleLinks(wx_id,page)
+					print(e)
+					# 休息3秒后继续采集下一页
+					# 只采集前五页的文章链接
+					time.sleep(3)
+					self.fetchArticleLinks(wx_id,page)
 
 
 	"""
