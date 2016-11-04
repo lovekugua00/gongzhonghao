@@ -19,7 +19,8 @@ class GZHDog:
 			'gzh':'wx_gzh',
 			'category':'wx_category',
 			'rank':'wx_rank',
-			'articles':'wp_articles'
+			'articles':'wx_articles',
+			'links':'wx_links'
 		}	
 		self.db = mysql.connector.connect(host='localhost', user='root',passwd='',db='ghdog')
 		self.headers = {
@@ -27,7 +28,7 @@ class GZHDog:
 			'User-Agent':"Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.89 Safari/537.36"
 		}
 		self.__wzs_headers = {'cookie':'PHPSESSID=jaani4j1gfqm8qahle9tbok9t1; u=eE9UTXpVZ3hORGN6TVRReE5qWTQ%3D; Hm_lvt_f4e1e6802d0e71229503ea0d06d0fd16=1473141532; Hm_lpvt_f4e1e6802d0e71229503ea0d06d0fd16=1473213003'}
-		self.__createTables()
+		# self.__createTables()
 		# proxy_support = ProxyHandler({'http':'http://112.81.100.102:8888'})
 		# opener = build_opener(proxy_support)
 		# opener.addheaders = [('User-Agent','Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.89 Safari/537.36')]
@@ -41,40 +42,49 @@ class GZHDog:
 				CREATE TABLE IF NOT EXISTS wx_gzh (
 				wx_id varchar(32) NOT NULL,
 				name varchar(32) NOT NULL,
-				ori_avatar varchar(128) DEFAULT NULL,
-				avatar varchar(128) DEFAULT NULL,
-				profile varchar(256) DEFAULT NULL,
-				auth varchar(32) DEFAULT NULL,
-				qrcode varchar(128) DEFAULT NULL,
-				timestamp datetime DEFAULT NULL,
+				ori_avatar varchar(128) NOT NULL,
+				avatar varchar(128) NOT NULL,
+				profile varchar(256) NOT NULL,
+				auth varchar(32) NOT NULL,
+				qrcode varchar(128) NOT NULL,
+				timestamp datetime NOT NULL,
 				PRIMARY KEY (wx_id)
 				);
 
 				CREATE TABLE IF NOT EXISTS wx_articles (
 				id int(11) NOT NULL AUTO_INCREMENT,
 				wx_id varchar(32) NOT NULL,
-				article_author varchar(64) DEFAULT NULL,
-				article_title text NOT NULL,
-				article_excerpt text DEFAULT NULL,				
-				article_content text DEFAULT NULL,
+				ori_url varchar(128) NOT NULL,				
+				article_title text NOT NULL,	
+				article_author varchar(64) NOT NULL,			
+				article_excerpt text NOT NULL,				
 				article_copyright int(1) DEFAULT 0,
-				article_date datetime DEFAULT NULL,
+				article_date datetime NOT NULL,
 				PRIMARY KEY (id)
 				);
 
 				CREATE TABLE IF NOT EXISTS wx_category (
 				id int(11) NOT NULL,
-				name varchar(32) DEFAULT NULL,
+				name varchar(32) NOT NULL,
 				PRIMARY KEY (id)
 				) ;
 
 				CREATE TABLE IF NOT EXISTS wx_rank (
 				id int(11) NOT NULL AUTO_INCREMENT,
-				wx_id varchar(32) DEFAULT NULL,
-				cat_id int(5) DEFAULT NULL,
-				rank int(5) DEFAULT NULL,
+				wx_id varchar(32) NOT NULL,
+				cat_id int(5) NOT NULL,
+				rank int(5) NOT NULL,
 				PRIMARY KEY (id)
 				);
+
+				CREATE TABLE IF NOT EXISTS wx_links (
+				id int(11) NOT NULL AUTO_INCREMENT,
+				link_id varchar(15) NOT NULL,
+				link_status int(2) DEFAULT 0 NOT NULL,
+				link_date datetime NOT NULL,
+				PRIMARY KEY (id)
+				);
+				ALTER TABLE wx_links ADD UNIQUE link_id (link_id);
 			'''		
 		# 一次性创建所有表	
 		for s in cursor.execute(sql, multi=True): pass
@@ -86,9 +96,9 @@ class GZHDog:
 			try:
 				response = urlopen(req,timeout=1000)			
 			except HTTPError as e:
-				print('HTTP错误')
+				print(e)
 			except URLError as e:
-				print('服务器没响应'+e.reason)				
+				print(e)				
 			else:
 				content=response.read().decode("utf8")
 				return content
@@ -200,6 +210,57 @@ class GZHDog:
 			if(data):			
 				self.__addGongzhonghao(data)
 				print(data[1]+"采集成功")
+
+
+	"""
+	获取微信公众号文章地址列表
+	"""
+	def fetchArticleLinks(self,wx_id,page = 0):
+		db = self.db
+		cursor = db.cursor()		
+		url = 'http://chuansong.me/account/newsxinhua?start=%s' % (12*page,)
+		content = self.__requestPage(url,{'User-Agent':'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.89 Safari/537.36'})
+		if(content):
+			pattern = re.compile('<a class="question_link" href="/n/(.*?)" target="_blank">.*?</a>.*?<span class="timestamp" style="color: #999">(.*?)</span>',re.S)	
+			items = re.findall(pattern,content)
+			if(len(items)):
+				page = page+1
+				print('%s:开始采集第%s页文章链接' % (wx_id,page))
+				try:
+					sql = 'insert into '+self.data_tables['links']+'(link_id,link_date) values(%s,%s)'
+					cursor.executemany(sql,items)
+					db.commit()
+					cursor.close()					
+					print('第%s页采集完成' % page)
+					# 休息3秒后继续采集下一页
+					time.sleep(3)
+					self.fetchArticleLinks(wx_id,page)
+				except:
+					db.rollback()
+					# time.sleep(3)
+					# self.fetchArticleLinks(wx_id,page)
+
+
+	"""
+	根据公众号去传送门采集文章
+	@param {string} link_id 文章链接ID
+	"""
+	def fetchArticles(self,link_id):
+		db = self.db
+		cursor = db.cursor()
+		url = 'http://chuansong.me/n/%s' % link_id;
+		content = self.__requestPage(url,{'User-Agent':'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.89 Safari/537.36'})
+		pattern = re.compile('<h2 class="rich_media_title" id="activity-name">\s+(.*?)\s*</h2>\s+<div class="rich_media_meta_list">[\s\S]*?<em class="rich_media_meta rich_media_meta_text" id="post-date">(.*?)<\/em>\s<em class="rich_media_meta rich_media_meta_text">(.*?)<\/em>[\s\S]*?<div class="rich_media_content " id="js_content">([\s\S]*?)<\/div>\s<div class="ct_mpda_wrp" id="js_sponsor_ad_area" style="display:none;">')			
+		tag_pattern = re.compile('<span class="rich_media_meta meta_original_tag" id="copyright_logo">.*?</span>');
+		if(content):
+			match = pattern.search(content)			
+			if(match):
+				t = match.groups();
+				title = t[0]
+				date = t[1]
+				author = t[2]
+				cont = t[3]	
+				print(cont)			
 
 	"""
 	通过搜狗查询公众号详细信息
@@ -364,18 +425,20 @@ class GZHDog:
 		# self.change_proxy()			
 		db = self.db
 		cursor = db.cursor()
-		sql = 'select wx_id,ori_avatar from %s where  isnull(avatar) ' % self.data_tables['gzh']
+		sql = 'select wx_id from %s ' % self.data_tables['gzh']
 		cursor.execute(sql)		
 		result = cursor.fetchall()		
 		if(len(result)):
 			for item in result:
 				wx_id = item[0]
-				img_url = item[1]
-				rel_path = self.__downloadImg(img_url)
-				print(rel_path)
-				if(rel_path):
-					self.__updateAvatar(wx_id,rel_path)
-				print('%s头像更新成功' % wx_id)
+				time.sleep(3)
+				self.fetchArticleLinks(wx_id)
+				# img_url = item[1]
+				# rel_path = self.__downloadImg(img_url)
+				# print(rel_path)
+				# if(rel_path):
+				# 	self.__updateAvatar(wx_id,rel_path)
+				# print('%s头像更新成功' % wx_id)
 
 
 
