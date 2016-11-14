@@ -15,7 +15,7 @@ class GZHDog:
 	"""公号狗，采集热门微信公众号及文章"""
 	def __init__(self):		
 		self.proxies = [None];	
-		self.data_tables = {
+		self.tables = {
 			'gzh':'wx_gzh',
 			'category':'wx_category',
 			'rank':'wx_rank',
@@ -28,7 +28,7 @@ class GZHDog:
 			'User-Agent':"Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.89 Safari/537.36"
 		}
 		self.__wzs_headers = {'cookie':'PHPSESSID=jaani4j1gfqm8qahle9tbok9t1; u=eE9UTXpVZ3hORGN6TVRReE5qWTQ%3D; Hm_lvt_f4e1e6802d0e71229503ea0d06d0fd16=1473141532; Hm_lpvt_f4e1e6802d0e71229503ea0d06d0fd16=1473213003'}
-		# self.__createTables()
+		self.__createTables()
 		# proxy_support = ProxyHandler({'http':'http://112.81.100.102:8888'})
 		# opener = build_opener(proxy_support)
 		# opener.addheaders = [('User-Agent','Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.89 Safari/537.36')]
@@ -57,7 +57,8 @@ class GZHDog:
 				ori_url varchar(128) NOT NULL,				
 				article_title text NOT NULL,	
 				article_author varchar(64) NOT NULL,			
-				article_excerpt text NOT NULL,				
+				article_excerpt text NOT NULL,	
+				article_content text NOT NULL,			
 				article_copyright int(1) DEFAULT 0,
 				article_date datetime NOT NULL,
 				PRIMARY KEY (id)
@@ -84,7 +85,7 @@ class GZHDog:
 				link_date datetime NOT NULL,
 				PRIMARY KEY (id)
 				);
-				ALTER TABLE wx_links ADD UNIQUE link_id (link_id);
+				-- ALTER TABLE wx_links ADD UNIQUE link_id (link_id);
 			'''		
 		# 一次性创建所有表	
 		for s in cursor.execute(sql, multi=True): pass
@@ -126,7 +127,7 @@ class GZHDog:
 	def fetchWeixinRank(self):
 		db = self.db;
 		headers = self.__wzs_headers;
-		tables = self.data_tables
+		tables = self.tables
 		cursor = db.cursor()		
 		sql = 'select id from '+tables['category'];
 		cursor.execute(sql)
@@ -193,14 +194,14 @@ class GZHDog:
 	def fetchRankGongzhonghao(self):		
 		cursor = self.db.cursor()
 		#查找出所有的公众号ID
-		sql = "select wx_id from "+self.data_tables['gzh'];		
+		sql = "select wx_id from "+self.tables['gzh'];		
 		try:
 			cursor.execute(sql)
 			results = cursor.fetchall()
 			tup_wx_id = ()
 			for v in results:
 				tup_wx_id+=v
-			sql = 'select wx_id from '+self.data_tables['rank']+' where wx_id not in '+str(tup_wx_id)
+			sql = 'select wx_id from '+self.tables['rank']+' where wx_id not in '+str(tup_wx_id)
 			cursor.execute(sql)
 			wxList = cursor.fetchall()
 		except:
@@ -215,7 +216,7 @@ class GZHDog:
 	"""
 	获取微信公众号文章地址列表
 	"""
-	def fetchArticleLinks(self,wx_id,page = 0):
+	def __fetchArticleLinks(self,wx_id,page = 0):
 		page = page
 		db = self.db
 		cursor = db.cursor()		
@@ -229,7 +230,7 @@ class GZHDog:
 				print('%s:开始采集第%s页文章链接' % (wx_id,page))
 				print(items)
 				try:
-					sql = 'insert into '+self.data_tables['links']+'(link_id,link_date) values(%s,%s)'
+					sql = 'insert into '+self.tables['links']+'(link_id,link_date) values(%s,%s)'
 					cursor.executemany(sql,items)
 					db.commit()
 					cursor.close()					
@@ -237,43 +238,79 @@ class GZHDog:
 					# 休息3秒后继续采集下一页
 					# 只采集前五页的文章链接
 					time.sleep(3)
-					self.fetchArticleLinks(wx_id,page)
+					self.__fetchArticleLinks(wx_id,page)
 				except Exception as e:
 					db.rollback()
 					print(e)
 					# 休息3秒后继续采集下一页
 					# 只采集前五页的文章链接
 					time.sleep(3)
-					self.fetchArticleLinks(wx_id,page)
+					self.__fetchArticleLinks(wx_id,page)
 
 
 	"""
 	根据公众号去传送门采集文章
 	@param {string} link_id 文章链接ID
 	"""
-	def fetchArticles(self,link_id):
-		db = self.db
-		cursor = db.cursor()
+	def __fetchArticle(self,link_id):
 		url = 'http://chuansong.me/n/%s' % link_id;
 		content = self.__requestPage(url,{'User-Agent':'Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.89 Safari/537.36'})
-		pattern = re.compile('<h2 class="rich_media_title" id="activity-name">\s+(.*?)\s*</h2>\s+<div class="rich_media_meta_list">[\s\S]*?<em class="rich_media_meta rich_media_meta_text" id="post-date">(.*?)<\/em>\s<em class="rich_media_meta rich_media_meta_text">(.*?)<\/em>[\s\S]*?<div class="rich_media_content " id="js_content">([\s\S]*?)<\/div>\s<div class="ct_mpda_wrp" id="js_sponsor_ad_area" style="display:none;">')			
+		pattern = re.compile('<h2 class="rich_media_title" id="activity-name">\s+(.*?)\s*</h2>\s+<div class="rich_media_meta_list">[\s\S]*?<em class="rich_media_meta rich_media_meta_text" id="post-date">(.*?)<\/em>\s<em class="rich_media_meta rich_media_meta_text">(.*?)<\/em>\s+<a class="rich_media_meta rich_media_meta_link rich_media_meta_nickname" href="/account/(.*?)" id="post-user">.*?</a>[\s\S]*?<div class="rich_media_content " id="js_content">\s+([\s\S]*?)<\/div>\s<div class="ct_mpda_wrp" id="js_sponsor_ad_area" style="display:none;">')			
 		tag_pattern = re.compile('<span class="rich_media_meta meta_original_tag" id="copyright_logo">.*?</span>');
 		if(content):
 			match = pattern.search(content)		
 			if(match):
 				'''
-					t = match.groups(); title = t[0] date = t[1] author = t[2] cont = t[3]					
+					t = match.groups(); title = t[0] date = t[1] author = t[2] wx_id = t[3] cont = t[4]					
 				'''
-				a1 = match.groups()
+				article = match.groups()
 				tm = tag_pattern.search(content)
 				if(tm):
 					#(1,)表示原创文章
-					articles = a1+(1,)
-				return articles
+					article +=(1,url)
+				else:
+					article +=(0,url)
+				return article
 			else:
 				return None
 		else:
 			return None
+
+	'''
+	保存文章
+	@param {tuple} article
+	'''
+	def __saveArticle(self,article):
+		db = self.db
+		tables = self.tables
+		cursor = db.cursor()
+		if(article):			
+			title = article[0]
+			date  = article[1]
+			author = article[2]
+			wx_id = article[3]
+			content = article[4].replace('"','\\"')
+			copyright = article[5]
+			ori_url = article[6]
+
+			#检查文章是否已经插入 
+			sql = 'select count(*) from '+self.tables['articles']+' where article_title="%s" and wx_id="%s"' % (title,wx_id)
+			cursor.execute(sql)
+			results = cursor.fetchall()
+
+			#返回的数据格式[(0,)]
+			if(results[0][0]==0):
+				try:
+					sql = 'insert into '+self.tables['articles']+'(ori_url,article_title,article_date,article_author,wx_id,article_content,article_copyright) values("%s","%s","%s","%s","%s","%s","%s")' % (ori_url,title,date,author,wx_id,content,copyright)
+					cursor.execute(sql)
+					db.commit()
+					print(sql)
+				except Exception as e:
+					print(e)
+					db.rollback()
+			else:
+				print('文章已存在')
+			cursor.close()
 
 	"""
 	通过搜狗查询公众号详细信息
@@ -311,7 +348,7 @@ class GZHDog:
 			auth = data[6]or""
 			db = self.db
 			cursor = db.cursor();
-			sql = "insert into "+self.data_tables["gzh"]+" set wx_id='%s', name='%s', ori_avatar='%s',profile='%s',auth='%s',timestamp='%s' "%(wx_id,name,ori_avatar,profile,auth,time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()));
+			sql = "insert into "+self.tables["gzh"]+" set wx_id='%s', name='%s', ori_avatar='%s',profile='%s',auth='%s',timestamp='%s' "%(wx_id,name,ori_avatar,profile,auth,time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()));
 			try:
 			   # 执行SQL语句
 			   cursor.execute(sql)
@@ -326,7 +363,7 @@ class GZHDog:
 		if(wx_id and img_url):
 			db = self.db
 			cursor = db.cursor();			
-			sql = "update "+self.data_tables['gzh']+" set avatar ='%s' where wx_id='%s'" % (img_url,wx_id)
+			sql = "update "+self.tables['gzh']+" set avatar ='%s' where wx_id='%s'" % (img_url,wx_id)
 			try:
 				cursor.execute(sql)
 				db.commit()
@@ -345,7 +382,7 @@ class GZHDog:
 			auth = data[6]or""
 			db = self.db
 			cursor = db.cursor();
-			sql = "update "+self.data_tables['gzh']+" set name='%s', ori_avatar='%s',profile='%s',auth='%s',timestamp='%s' where id='%s'"%(name,ori_avatar,profile,auth,time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),wid);
+			sql = "update "+self.tables['gzh']+" set name='%s', ori_avatar='%s',profile='%s',auth='%s',timestamp='%s' where id='%s'"%(name,ori_avatar,profile,auth,time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()),wid);
 			try:
 			   # 执行SQL语句
 			   cursor.execute(sql)
@@ -435,17 +472,19 @@ class GZHDog:
 
 
 	def start(self):
+		article = self.__fetchArticle('1059361348302')
+		self.__saveArticle(article)
 		# self.change_proxy()			
-		db = self.db
-		cursor = db.cursor()
-		sql = 'select wx_id from %s ' % self.data_tables['gzh']
-		cursor.execute(sql)		
-		result = cursor.fetchall()		
-		if(len(result)):
-			for item in result:
-				wx_id = item[0]
-				time.sleep(3)
-				self.fetchArticleLinks(wx_id)
+		# db = self.db
+		# cursor = db.cursor()
+		# sql = 'select wx_id from %s ' % self.tables['gzh']
+		# cursor.execute(sql)		
+		# result = cursor.fetchall()		
+		# if(len(result)):
+		# 	for item in result:
+		# 		wx_id = item[0]
+		# 		time.sleep(3)
+		# 		self.__fetchArticleLinks(wx_id)
 				# img_url = item[1]
 				# rel_path = self.__downloadImg(img_url)
 				# print(rel_path)
