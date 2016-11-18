@@ -8,14 +8,14 @@
 // +----------------------------------------------------------------------
 // | Author: liu21st <liu21st@gmail.com>
 // +----------------------------------------------------------------------
-
 return [
     '__pattern__' => [
         'name' => '\w+',
+    ],   
+    '[cat]'     => [
+        ':id'   => ['index/getCategory', ['method' => 'get'], ['id' => '\d+']]
     ],
-    '[hello]'     => [
-        ':id'   => ['index/hello', ['method' => 'get'], ['id' => '\d+']],
-        ':name' => ['index/hello', ['method' => 'post']],
-    ],
-
+    '[profile]'     => [
+        ':id'   => ['index/getArticleList', ['method' => 'get']]
+    ]
 ];
